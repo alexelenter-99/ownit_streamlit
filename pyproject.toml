@@ -1,0 +1,71 @@
+[tool.poetry]
+name = "ownit"
+version = "0.1.0"
+description = ""
+authors = ["Alex Elenter <83474610+alexelenter-99@users.noreply.github.com>"]
+readme = "README.md"
+packages = [{ include = "agent", from = "app/src" }]
+
+# The `requires-python` line that caused the error has been removed from here.
+
+[tool.poetry.dependencies]
+python = "^3.11"
+langgraph = "^1.0.1"
+langsmith = ">=0.4.5,<0.5.0"
+python-dotenv = ">=1.0.0"
+ruff = ">=0.4,<1.0"
+pillow = ">=11.3.0,<12.0.0"
+google-genai = ">=1.25.0,<2.0.0"
+langchain-openai = ">=0.3.27,<0.4.0"
+pybase64 = ">=1.4.1,<2.0.0"
+openai-agents = ">=0.1.0,<0.2.0"
+uvicorn = ">=0.35.0,<0.36.0"
+fastapi = "^0.116.1"
+langchain = "^0.3.26"
+langchain-google-genai = "^2.1.7"
+langchain-community = "^0.3.27"
+langgraph-cli = "^0.3.4"
+langgraph-api = "^0.2.86"
+langserve = "^0.3.1"
+streamlit = "^1.50.0"
+langgraph-checkpoint-sqlite = "^3.0.0"
+
+[tool.ruff]
+extend-include = ["*.ipynb"]
+output-format = "concise"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "UP",
+    "B",
+    "SIM",
+    "I",
+    "D101",
+    "D102",
+    "D103",
+    "C90",
+    "PL",
+    "ERA",
+    "A",
+    "C4",
+    "T20",
+    "RUF",
+]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 50
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 100
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

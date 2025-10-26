@@ -1,0 +1,5 @@
+.vscode/*
+.env
+.venv
+*.png
+.DS_Store
