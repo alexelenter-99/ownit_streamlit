@@ -40,7 +40,7 @@ Sigue este proceso rigurosamente:
     - Cuando el cliente esté satisfecho, procede a preguntale cual de los diseños desea (el 1, 2, 3, ...).
     - Pregunta por talle (S, M, L, XL) y tipo de producto (LISO o JASPEADO).
     - Llama a la herramienta `convert_black_to_transparent` con la ruta de la imagen elegida y un nombre de archivo descriptivo:
-      - Si el __input_path__ es "jondoe@gmail.com/design-2.png" y pidio remera M lisa el __output_path__ es "jondoe@gmail.com/talle-m-lisa.png"
+      - Si el __input_path__ es "design-2.png" y pidio remera M lisa el __output_path__ es "talle-m-lisa.png"
     - Informa al cliente que el diseño está listo para producción. NO menciones la ruta del archivo.
 </Instrucciones>
 

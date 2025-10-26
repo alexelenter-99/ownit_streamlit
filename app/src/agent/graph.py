@@ -4,16 +4,18 @@ Works with a chat model with tool calling support.
 """
 
 import base64
+import logging
 import os
-
-# from langgraph.prebuilt import ToolNode # Not used
+import re  # <-- Import regex
 import sqlite3
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, ToolMessage
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from agent.configuration import Configuration
@@ -21,14 +23,18 @@ from agent.state import InputState, State
 from agent.tools import TOOLS
 from agent.utils import load_chat_model
 
+# logging.basicConfig(level=logging.DEBUG)
+
 load_dotenv()
 
-conn = sqlite3.connect("memory.sqlite", check_same_thread=False)
-memory = SqliteSaver(conn=conn)
+# conn = sqlite3.connect("memory.sqlite", check_same_thread=False)
+# memory = SqliteSaver(conn=conn)
+# memory = AsyncSqliteSaver.from_conn_string("memory.sqlite")
+memory = InMemorySaver()
+
 
 configuration = Configuration.from_context()
 model = load_chat_model(configuration.model).bind_tools(TOOLS)
-
 
 async def call_model(state: State) -> dict[str, Any]:
     """
@@ -49,18 +55,51 @@ async def call_model(state: State) -> dict[str, Any]:
         ),
     )
 
+    # --- MODIFICATION: Extract <Plan> into response_metadata ---
+    user_facing_content = response.content
+    internal_plan = None
+
+    # Start with existing metadata, or an empty dict
+    new_response_metadata = response.response_metadata or {}
+
+    if isinstance(user_facing_content, str):
+        # Use regex to find and extract the plan
+        # re.DOTALL makes '.' match newline characters.
+        match = re.search(r"<Plan>(.*?)</Plan>(.*)", user_facing_content, re.DOTALL)
+        if match:
+            internal_plan = match.group(1).strip()
+            user_facing_content = match.group(2).strip()
+            # Add the extracted plan to the metadata
+            new_response_metadata["internal_plan"] = internal_plan
+
+    # Create a new AIMessage with the cleaned content and the new metadata
+    cleaned_response = AIMessage(
+        content=user_facing_content,
+        id=response.id,
+        tool_calls=response.tool_calls,
+        # Pass through other attributes
+        name=getattr(response, "name", None),
+        invalid_tool_calls=getattr(response, "invalid_tool_calls", None),
+        tool_call_chunks=getattr(response, "tool_call_chunks", None),
+        usage_metadata=getattr(response, "usage_metadata", None),
+        # Set the new metadata
+        response_metadata=new_response_metadata,
+    )
+    # --- END MODIFICATION ---
+
     # Handle the case when it's the last step and the model still wants to use a tool
-    if state.is_last_step and response.tool_calls:
+    # Use the 'cleaned_response' for this check
+    if state.is_last_step and cleaned_response.tool_calls:
         return {
             "messages": [
                 AIMessage(
-                    id=response.id,
+                    id=cleaned_response.id,  # Use ID from cleaned response
                     content="Sorry, I could not find an answer to your question in the specified number of steps.",
                 ),
             ]
         }
 
-    return {"messages": [response]}
+    return {"messages": [cleaned_response]}  # Return the message with metadata
 
 
 async def custom_tool_node(state: State) -> dict[str, Any]:
@@ -73,8 +112,8 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
         return {}
 
     user_email = state.email or "unknown_user"
-    # All user-specific files will be saved under 'static/<email>/'
-    base_path = os.path.join("static", user_email)
+    # All user-specific files will be saved under 'images/<email>/'
+    base_path = os.path.join("images", user_email)  # <-- Using images/ dir
     os.makedirs(base_path, exist_ok=True)  # Ensure the directory exists
 
     tool_messages = []
@@ -102,10 +141,13 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
                 args["output_path"] = os.path.join(base_path, f"design-{image_num}.png")
 
             if tool_name == "convert_black_to_transparent":
-                # The AI provides relative filenames (e.g., "design-2.png")
+                # The AI provides relative filenames (e.g., "design-2.png" or "talle-m-lisa.png")
                 # We prepend the user's path to make them correct
-                args["image_path"] = os.path.join(base_path, args["image_path"])
-                args["output_path"] = os.path.join(base_path, args["output_path"])
+                # Use os.path.basename to be safe against "images/user/design-2.png"
+                img_name = os.path.basename(args["image_path"])
+                out_name = os.path.basename(args["output_path"])
+                args["image_path"] = os.path.join(base_path, img_name)
+                args["output_path"] = os.path.join(base_path, out_name)
 
             # Execute the tool with modified arguments
             tool_output = await tool_to_run.ainvoke(args)

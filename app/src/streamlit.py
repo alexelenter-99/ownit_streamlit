@@ -102,6 +102,7 @@ async def run_agent(email: str | None = None) -> dict[str, Any]:
 
     except Exception as e:
         st.error(f"Error running agent: {e!s}")
+        breakpoint()
         return {
             "messages": st.session_state.messages,
             "artifacts": st.session_state.artifacts,
