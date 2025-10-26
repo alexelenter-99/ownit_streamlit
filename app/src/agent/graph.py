@@ -20,7 +20,7 @@ from langgraph.graph import END, START, StateGraph
 
 from agent.configuration import Configuration
 from agent.state import InputState, State
-from agent.tools import TOOLS
+from agent.tools import TOOLS, upload_to_firebase
 from agent.utils import load_chat_model
 
 # logging.basicConfig(level=logging.DEBUG)
@@ -133,7 +133,7 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
             )
             continue
 
-        try:
+        try:            
             # --- Modified logic to handle all file paths ---
             if tool_name == "create_image":
                 image_num = args.get("image_number", 1)
@@ -158,6 +158,22 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
                     name=tool_name,
                 )
             )
+            
+            if (
+                tool_name == "create_image"
+                or tool_name == "convert_black_to_transparent"
+            ):
+                print(f"Tool {tool_name} finished, output to: {tool_output}")
+                try:
+                    # Upload the file from the ephemeral disk to Google Drive
+                    drive_link = upload_to_firebase(tool_output)
+                    if drive_link:
+                        print(f"Successfully uploaded to firebase: {drive_link}")
+                        # You could even modify tool_output here if you want
+                        # tool_output = drive_link
+                except Exception as e:
+                    # Don't fail the whole step, just log the upload error
+                    print(f"Failed to upload {tool_output} to Firebase: {e}")
         except Exception as e:
             tool_messages.append(
                 ToolMessage(
