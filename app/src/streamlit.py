@@ -102,7 +102,6 @@ async def run_agent(email: str | None = None) -> dict[str, Any]:
 
     except Exception as e:
         st.error(f"Error running agent: {e!s}")
-        breakpoint()
         return {
             "messages": st.session_state.messages,
             "artifacts": st.session_state.artifacts,
@@ -115,22 +114,34 @@ def setup_sidebar() -> str:
         st.header("⚙️ Configuration")
 
         user_email = st.text_input(
-            "Email (optional):",
+            "Email:",  # <-- Made label shorter
             placeholder="your.email@example.com",
-            help="Provide your email for personalized responses",
+            help="Your email is required to start the chat.",
         )
 
         if st.button("🗑️ Clear Chat", type="secondary"):
             st.session_state.messages = []
             st.session_state.artifacts = []
-            # --- Create a new thread_id to start a new conversation ---
             st.session_state.thread_id = str(uuid.uuid4())
             st.rerun()
 
         st.markdown("---")
         st.markdown(f"**Messages in chat:** {len(st.session_state.messages)}")
-        st.markdown(f"**Artifacts generated:** {len(st.session_state.artifacts)}")
-        # Display the thread_id for debugging
+
+        # --- MOVED DISPLAY ARTIFACTS HERE ---
+        st.markdown("---")
+        st.subheader("📦 Generated Artifacts")
+        st.markdown(f"**Total:** {len(st.session_state.artifacts)}")
+
+        if st.session_state.artifacts:
+            # Display in reverse order (newest first)
+            for artifact in reversed(st.session_state.artifacts):
+                display_artifact(artifact)
+        else:
+            st.caption("No artifacts generated yet.")
+        # --- END MOVED SECTION ---
+
+        st.markdown("---")
         st.caption(f"Thread ID: `{st.session_state.thread_id}`")
 
     return user_email
@@ -159,18 +170,17 @@ def display_chat_history() -> None:
 
 def display_artifacts_section() -> None:
     """Display generated artifacts section."""
-    if st.session_state.artifacts:
-        st.markdown("---")
-        st.subheader("📦 Generated Artifacts")
-
-        # This will display all artifacts in the state
-        for artifact in st.session_state.artifacts:
-            display_artifact(artifact)
+    pass
 
 
 def handle_chat_input(user_email: str) -> None:
     """Handle chat input and agent processing."""
     if prompt := st.chat_input("Ask me anything..."):
+        
+        if not user_email:
+            st.error("Please enter your email in the sidebar to begin.")
+            st.stop()
+        
         # Add user message to session state
         user_message = HumanMessage(content=prompt)
         st.session_state.messages.append(user_message)
@@ -201,7 +211,8 @@ def process_agent_result(result: dict[str, Any]) -> None:
     """Process the agent result and update session state."""
     # --- Replace local state with the full state from the agent's memory ---
     st.session_state.messages = result.get("messages", [])
-    st.session_state.artifacts = result.get("artifacts", [])
+    new_artifacts = result.get("artifacts", [])
+    st.session_state.artifacts.extend(new_artifacts)
 
 
 def main():
@@ -213,7 +224,7 @@ def main():
 
     display_chat_history()
 
-    display_artifacts_section()
+    # display_artifacts_section()
 
     handle_chat_input(user_email)
 

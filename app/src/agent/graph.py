@@ -117,6 +117,7 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
     os.makedirs(base_path, exist_ok=True)  # Ensure the directory exists
 
     tool_messages = []
+    new_artifacts = []
 
     for tool_call in last_message.tool_calls:
         tool_name = tool_call["name"]
@@ -134,16 +135,12 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
             continue
 
         try:            
-            # --- Modified logic to handle all file paths ---
             if tool_name == "create_image":
                 image_num = args.get("image_number", 1)
                 # Ensure output path is in the user's directory
                 args["output_path"] = os.path.join(base_path, f"design-{image_num}.png")
 
             if tool_name == "convert_black_to_transparent":
-                # The AI provides relative filenames (e.g., "design-2.png" or "talle-m-lisa.png")
-                # We prepend the user's path to make them correct
-                # Use os.path.basename to be safe against "images/user/design-2.png"
                 img_name = os.path.basename(args["image_path"])
                 out_name = os.path.basename(args["output_path"])
                 args["image_path"] = os.path.join(base_path, img_name)
@@ -163,17 +160,25 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
                 tool_name in ("create_image", "convert_black_to_transparent")
             ):
                 logging.info(f"Tool {tool_name} finished, output to local path: {tool_output}")
+                
+                # create artifact for frontend display
                 try:
-                    # Upload the file from the ephemeral disk to GCS
-                    public_url = upload_to_gcs(tool_output)  # <-- Call GCS function
+                    with open(tool_output, "rb") as image_file:
+                        image_b64 = base64.b64encode(image_file.read()).decode("utf-8")
+                    new_artifacts.append({"type": "image", "b64": image_b64}) 
+                    logging.info(f"Created artifact for {tool_output}")
+                except Exception as e:
+                    logging.error(f"Failed to create artifact from {tool_output}: {e}")                
+                
+                # upload to google bucket
+                try:
+                    public_url = upload_to_gcs(tool_output, user_email)
                     if public_url:
                         logging.info(f"Successfully uploaded to GCS: {public_url}")
-                        # Change the tool output to be the public URL
                         tool_output = public_url
                     else:
                         logging.error("Failed to get public URL from GCS.")
                 except Exception as e:
-                    # Don't fail the whole step, just log the upload error
                     logging.error(f"Failed to upload {tool_output} to GCS: {e}")
         except Exception as e:
             tool_messages.append(
@@ -184,7 +189,10 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
             )
             logging.error(f"Error executing tool {tool_name}: {e}")  # For server logs
 
-    return {"messages": [*state.messages, *tool_messages]}
+    return {
+        "messages": [*state.messages, *tool_messages],
+        "artifacts": new_artifacts
+    }
 
 
 def send_artifact_to_frontend(state: State) -> dict[str, Any]:
