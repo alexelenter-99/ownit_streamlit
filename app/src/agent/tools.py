@@ -1,11 +1,13 @@
 import base64
 import json
+import logging
 import os
 from typing import Annotated, Any, Callable, List, Optional
 
-import firebase_admin
 import streamlit as st
 from firebase_admin import credentials, storage
+from google.cloud import storage
+from google.oauth2 import service_account
 from langchain_core.tools import tool
 from openai import OpenAI
 from PIL import Image, ImageDraw
@@ -113,29 +115,32 @@ def create_image(
     return output_path
 
 
-def upload_to_firebase(file_path: str) -> str | None:
-    """Uploads a file to Firebase Storage."""
+def upload_to_gcs(file_path: str) -> str | None:
+    """Uploads a file to Google Cloud Storage and makes it public."""
     try:
-        # 1. Initialize Firebase (if not already done)
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(st.secrets["firebase_service_account"])
-            firebase_admin.initialize_app(
-                cred, {"storageBucket": st.secrets["FIREBASE_STORAGE_BUCKET"]}
-            )
+        # 1. Load Credentials from Streamlit Secrets
+        cred_info = st.secrets["gcp_service_account"]
+        credentials = service_account.Credentials.from_service_account_info(cred_info)
 
-        bucket = storage.bucket()
+        # 2. Initialize GCS Client
+        client = storage.Client(credentials=credentials)
+
+        # 3. Get Bucket and define blob name
+        bucket_name = st.secrets["GCP_BUCKET_NAME"]
+        bucket = client.bucket(bucket_name)
+
         file_name = os.path.basename(file_path)
-        # Create a blob and upload the file
-        blob = bucket.blob(f"images/{file_name}")
+        destination_blob_name = f"images/{file_name}"  # Saves to an 'images' folder
+
+        # 4. Upload the file
+        blob = bucket.blob(destination_blob_name)
         blob.upload_from_filename(file_path)
 
-        # 4. Make the file public and get the URL
-        blob.make_public()
-        print(f"File {file_name} uploaded, View Link: {blob.public_url}")
+        logging.info(f"File {file_name} uploaded to GCS: {blob.public_url}")
         return blob.public_url
 
     except Exception as e:
-        print(f"Failed to upload to Firebase: {e}")
+        logging.error(f"Failed to upload to GCS: {e}")
         return None
 
 

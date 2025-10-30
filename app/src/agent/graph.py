@@ -20,7 +20,7 @@ from langgraph.graph import END, START, StateGraph
 
 from agent.configuration import Configuration
 from agent.state import InputState, State
-from agent.tools import TOOLS, upload_to_firebase
+from agent.tools import TOOLS, upload_to_gcs
 from agent.utils import load_chat_model
 
 # logging.basicConfig(level=logging.DEBUG)
@@ -158,22 +158,23 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
                     name=tool_name,
                 )
             )
-            
+
             if (
-                tool_name == "create_image"
-                or tool_name == "convert_black_to_transparent"
+                tool_name in ("create_image", "convert_black_to_transparent")
             ):
-                print(f"Tool {tool_name} finished, output to: {tool_output}")
+                logging.info(f"Tool {tool_name} finished, output to local path: {tool_output}")
                 try:
-                    # Upload the file from the ephemeral disk to Google Drive
-                    drive_link = upload_to_firebase(tool_output)
-                    if drive_link:
-                        print(f"Successfully uploaded to firebase: {drive_link}")
-                        # You could even modify tool_output here if you want
-                        # tool_output = drive_link
+                    # Upload the file from the ephemeral disk to GCS
+                    public_url = upload_to_gcs(tool_output)  # <-- Call GCS function
+                    if public_url:
+                        logging.info(f"Successfully uploaded to GCS: {public_url}")
+                        # Change the tool output to be the public URL
+                        tool_output = public_url
+                    else:
+                        logging.error("Failed to get public URL from GCS.")
                 except Exception as e:
                     # Don't fail the whole step, just log the upload error
-                    print(f"Failed to upload {tool_output} to Firebase: {e}")
+                    logging.error(f"Failed to upload {tool_output} to GCS: {e}")
         except Exception as e:
             tool_messages.append(
                 ToolMessage(
@@ -181,7 +182,7 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
                     tool_call_id=tool_call["id"],
                 )
             )
-            print(f"Error executing tool {tool_name}: {e}")  # For server logs
+            logging.error(f"Error executing tool {tool_name}: {e}")  # For server logs
 
     return {"messages": [*state.messages, *tool_messages]}
 
@@ -198,7 +199,7 @@ def send_artifact_to_frontend(state: State) -> dict[str, Any]:
         image_path = last_message.content
 
         try:
-            with open(image_path, "rb") as image_file:
+            with open(image_path, "rb") as image_file: # type: ignore allow image_path opening
                 image_b64 = base64.b64encode(image_file.read()).decode("utf-8")
 
             image_artifact = {
@@ -207,10 +208,10 @@ def send_artifact_to_frontend(state: State) -> dict[str, Any]:
             }
             return {"artifacts": [*state.artifacts, image_artifact]}
         except FileNotFoundError:
-            print(f"Error: Could not find image file at path: {image_path}")
+            logging.error(f"Error: Could not find image file at path: {image_path}")
             pass
         except Exception as e:
-            print(f"An error occurred while creating image artifact: {e}")
+            logging.error(f"An error occurred while creating image artifact: {e}")
             pass
 
     return {}
@@ -220,7 +221,7 @@ def route_model_output(state: State) -> Literal["__end__", "tools"]:
     """Determines the next node based on the model's output."""
     last_message = state.messages[-1]
     if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
-        return END
+        return END # type: ignore allow END constant
     return "tools"
 
 
