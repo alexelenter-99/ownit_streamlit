@@ -102,8 +102,8 @@ def create_image(
         n=1,
     )
 
-    image_b64 = response.data[0].b64_json
-    image_data = base64.b64decode(image_b64)
+    image_b64 = response.data[0].b64_json # type: ignore not null
+    image_data = base64.b64decode(image_b64)  # type: ignore image
 
     if not output_path:
         output_path = f"image-{image_number}.png"
@@ -115,22 +115,22 @@ def create_image(
     return output_path
 
 
-def upload_to_gcs(file_path: str) -> str | None:
+def upload_to_gcs(file_path: str, user_email: str) -> str | None:
     """Uploads a file to Google Cloud Storage and makes it public."""
     try:
         # 1. Load Credentials from Streamlit Secrets
-        cred_info = st.secrets["gcp_service_account"]
+        cred_info = st.secrets["gcp_service_account"] # type: ignore streamlit not found
         credentials = service_account.Credentials.from_service_account_info(cred_info)
 
         # 2. Initialize GCS Client
         client = storage.Client(credentials=credentials)
 
         # 3. Get Bucket and define blob name
-        bucket_name = st.secrets["GCP_BUCKET_NAME"]
+        bucket_name = st.secrets["GCP_BUCKET_NAME"]  # type: ignore streamlit not found
         bucket = client.bucket(bucket_name)
 
         file_name = os.path.basename(file_path)
-        destination_blob_name = f"images/{file_name}"  # Saves to an 'images' folder
+        destination_blob_name = f"{user_email}/{file_name}"
 
         # 4. Upload the file
         blob = bucket.blob(destination_blob_name)
@@ -181,4 +181,4 @@ TOOLS: List[Callable[..., Any]] = [
     create_image_prompt,
     create_image,
     convert_black_to_transparent,
-]
+] # type: ignore tool type

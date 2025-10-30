@@ -1,3 +1,4 @@
+# pyright: reportAttributeAccessIssue=false
 """
 Streamlit chatbot interface for the Ownit agent.
 
@@ -97,7 +98,7 @@ async def run_agent(email: str | None = None) -> dict[str, Any]:
         }
 
         # Run the agent
-        result = await agent_graph.ainvoke(input_state, config=config)
+        result = await agent_graph.ainvoke(input_state, config=config) # type: ignore config attribute
         return result
 
     except Exception as e:
@@ -111,7 +112,7 @@ async def run_agent(email: str | None = None) -> dict[str, Any]:
 def setup_sidebar() -> str:
     """Setup the sidebar configuration and return user email."""
     with st.sidebar:
-        st.header("⚙️ Configuration")
+        st.header("⚙️ Configuracion")
 
         user_email = st.text_input(
             "Email:",  # <-- Made label shorter
@@ -119,18 +120,18 @@ def setup_sidebar() -> str:
             help="Your email is required to start the chat.",
         )
 
-        if st.button("🗑️ Clear Chat", type="secondary"):
+        if st.button("🗑️ Borrars Chat", type="secondary"):
             st.session_state.messages = []
             st.session_state.artifacts = []
             st.session_state.thread_id = str(uuid.uuid4())
             st.rerun()
 
         st.markdown("---")
-        st.markdown(f"**Messages in chat:** {len(st.session_state.messages)}")
+        st.markdown(f"**Mensajes:** {len(st.session_state.messages)}")
 
         # --- MOVED DISPLAY ARTIFACTS HERE ---
         st.markdown("---")
-        st.subheader("📦 Generated Artifacts")
+        st.subheader("📦 Imagenes Generadas")
         st.markdown(f"**Total:** {len(st.session_state.artifacts)}")
 
         if st.session_state.artifacts:
@@ -138,11 +139,11 @@ def setup_sidebar() -> str:
             for artifact in reversed(st.session_state.artifacts):
                 display_artifact(artifact)
         else:
-            st.caption("No artifacts generated yet.")
+            st.caption("No se generaron imagenes todavia.")
         # --- END MOVED SECTION ---
 
         st.markdown("---")
-        st.caption(f"Thread ID: `{st.session_state.thread_id}`")
+        # st.caption(f"Thread ID: `{st.session_state.thread_id}`")
 
     return user_email
 
@@ -223,8 +224,6 @@ def main():
     user_email = setup_sidebar()
 
     display_chat_history()
-
-    # display_artifacts_section()
 
     handle_chat_input(user_email)
 

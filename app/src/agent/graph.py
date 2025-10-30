@@ -195,36 +195,6 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
     }
 
 
-def send_artifact_to_frontend(state: State) -> dict[str, Any]:
-    """
-    Checks the last message for an image tool output and, if found,
-    opens the image file, encodes it, and creates a display "artifact".
-    """
-    last_message = state.messages[-1]
-
-    # Check if the last message is the result of the create_image tool
-    if isinstance(last_message, ToolMessage) and last_message.name == "create_image":
-        image_path = last_message.content
-
-        try:
-            with open(image_path, "rb") as image_file: # type: ignore allow image_path opening
-                image_b64 = base64.b64encode(image_file.read()).decode("utf-8")
-
-            image_artifact = {
-                "type": "image",
-                "b64": image_b64,  # Using 'b64' key
-            }
-            return {"artifacts": [*state.artifacts, image_artifact]}
-        except FileNotFoundError:
-            logging.error(f"Error: Could not find image file at path: {image_path}")
-            pass
-        except Exception as e:
-            logging.error(f"An error occurred while creating image artifact: {e}")
-            pass
-
-    return {}
-
-
 def route_model_output(state: State) -> Literal["__end__", "tools"]:
     """Determines the next node based on the model's output."""
     last_message = state.messages[-1]
@@ -237,12 +207,10 @@ builder = StateGraph(State, input_schema=InputState, context_schema=Configuratio
 
 builder.add_node("call_model", call_model)
 builder.add_node("tools", custom_tool_node)
-builder.add_node("send_artifact_to_frontend", send_artifact_to_frontend)
 
 builder.add_edge(START, "call_model")
 builder.add_conditional_edges("call_model", route_model_output)
-builder.add_edge("tools", "send_artifact_to_frontend")
-builder.add_edge("send_artifact_to_frontend", "call_model")
+builder.add_edge("tools", "call_model")
 
 # --- Compile with memory ---
 graph = builder.compile(
