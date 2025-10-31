@@ -48,6 +48,7 @@ if "thread_id" not in st.session_state:
 
 def display_artifact(artifact: dict[str, Any]) -> None:
     """Display an artifact in the Streamlit interface."""
+    # breakpoint()
     with st.container():
         st.markdown('<div class="artifact-container">', unsafe_allow_html=True)
 
@@ -112,8 +113,6 @@ async def run_agent(email: str | None = None) -> dict[str, Any]:
 def setup_sidebar() -> str:
     """Setup the sidebar configuration and return user email."""
     with st.sidebar:
-        st.header("⚙️ Configuracion")
-
         user_email = st.text_input(
             "Email:",  # <-- Made label shorter
             placeholder="your.email@example.com",
@@ -126,17 +125,15 @@ def setup_sidebar() -> str:
             st.session_state.thread_id = str(uuid.uuid4())
             st.rerun()
 
-        st.markdown("---")
-        st.markdown(f"**Mensajes:** {len(st.session_state.messages)}")
-
         # --- MOVED DISPLAY ARTIFACTS HERE ---
         st.markdown("---")
         st.subheader("📦 Imagenes Generadas")
+        st.subheader("Tienes un limite de 3")
         st.markdown(f"**Total:** {len(st.session_state.artifacts)}")
 
         if st.session_state.artifacts:
             # Display in reverse order (newest first)
-            for artifact in reversed(st.session_state.artifacts):
+            for artifact in st.session_state.artifacts:
                 display_artifact(artifact)
         else:
             st.caption("No se generaron imagenes todavia.")
@@ -157,6 +154,11 @@ def display_chat_history() -> None:
         elif isinstance(message, AIMessage):
             with st.chat_message("assistant"):
                 st.write(message.content)
+                if hasattr(message, "response_metadata") and message.response_metadata:
+                    internal_plan = message.response_metadata.get("internal_plan")
+                    if internal_plan:
+                        with st.expander("🤔 Internal Plan"):
+                            st.markdown(internal_plan)
 
                 if hasattr(message, "tool_calls") and message.tool_calls:
                     with st.expander("🔧 Tool Calls"):

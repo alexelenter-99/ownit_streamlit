@@ -5,12 +5,11 @@ import os
 from typing import Annotated, Any, Callable, List, Optional
 
 import streamlit as st
-from firebase_admin import credentials, storage
 from google.cloud import storage
 from google.oauth2 import service_account
 from langchain_core.tools import tool
 from openai import OpenAI
-from PIL import Image, ImageDraw
+from PIL import Image
 
 
 @tool
@@ -145,6 +144,29 @@ def upload_to_gcs(file_path: str, user_email: str) -> str | None:
 
 
 @tool
+def finalize_design() -> str:
+    """
+    Call this tool with NO ARGUMENTS when the user indicates they are happy
+    with a design and want to move to the final step.
+    """
+    return "Signal received to enter finalization state."
+
+
+@tool
+def execute_production_file(
+    design_number: Annotated[int, "The number of the chosen design, e.g., 1, 2, or 3."],
+    size: Annotated[str, "The chosen t-shirt size, e.g., 'S', 'M', 'L', 'XL'."],
+    product_type: Annotated[
+        str, "The chosen product type, e.g., 'LISO' or 'JASPEADO'."
+    ],
+) -> str:
+    """
+    Call this tool ONLY from the finishing state AFTER gathering the
+    design number, size, and product type from the user.
+    """
+    return f"Production file signal received for design {design_number}, size {size}, type {product_type}."
+
+
 def convert_black_to_transparent(
     image_path: Annotated[str, "Path to the image to be converted"],
     output_path: Annotated[str, "Path to save the converted image"],
@@ -177,8 +199,9 @@ def convert_black_to_transparent(
     return output_path
 
 
-TOOLS: List[Callable[..., Any]] = [
+TOOLS: List[Callable[..., Any]] = [  # noqa: UP006 allow List
     create_image_prompt,
     create_image,
-    convert_black_to_transparent,
-] # type: ignore tool type
+    finalize_design,  
+    execute_production_file,
+]  # type: ignore tool type
