@@ -169,6 +169,7 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
     os.makedirs(base_path, exist_ok=True)  # Ensure the directory exists
 
     tool_messages = []
+    new_artifacts = []
     new_image_count = state.image_count
 
     for tool_call in last_message.tool_calls:
@@ -212,15 +213,13 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
                 )
             )
 
-            if (
-                tool_name in ("create_image", "convert_black_to_transparent")
-            ):
+            if tool_name == "create_image":
                 logging.info(f"Tool {tool_name} finished, output to local path: {tool_output}")
 
                 try:
                     with open(tool_output, "rb") as image_file:
                         image_b64 = base64.b64encode(image_file.read()).decode("utf-8")
-                    state.artifacts.append({"type": "image", "b64": image_b64}) 
+                    new_artifacts.append({"type": "image", "b64": image_b64})
                     logging.info(f"Created artifact for {tool_output}")
                 except Exception as e:
                     logging.error(f"Failed to create artifact from {tool_output}: {e}")                
@@ -245,7 +244,7 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
             logging.error(f"Error executing tool {tool_name}: {e}")  # For server logs
     return {
         "messages": [*state.messages, *tool_messages],
-        "artifacts": state.artifacts,
+        "artifacts": state.artifacts + new_artifacts,
         "image_count": new_image_count,
     }
 
@@ -266,7 +265,6 @@ async def production_node(state: State) -> dict[str, Any]:
     tool_call = last_message.tool_calls[0]
     args = tool_call["args"]
     tool_messages = []
-    new_artifacts = []
     user_email = state.email or "unknown_user"
     base_path = os.path.join("images", user_email)
 
@@ -303,15 +301,6 @@ async def production_node(state: State) -> dict[str, Any]:
         logging.info(f"Final file available at: {public_url}")
         tool_output = public_url
 
-        # 5. Create artifact for the final transparent image TODO: pass image to user?
-        # try:
-        #     with open(local_output_path, "rb") as image_file:
-        # image_b64 = base64.b64encode(image_file.read()).decode("utf-8")
-        # new_artifacts.append({"type": "image", "b64": image_b64})
-        #     logging.info(f"Created final artifact for {local_output_path}")
-        # except Exception as e:
-        #     logging.error(f"Failed to create final artifact: {e}")
-
         tool_messages.append(
             ToolMessage(
                 content=str(tool_output),
@@ -329,7 +318,7 @@ async def production_node(state: State) -> dict[str, Any]:
             )
         )
 
-    return {"messages": [*state.messages, *tool_messages], "artifacts": new_artifacts}
+    return {"messages": [*state.messages, *tool_messages], "artifacts": state.artifacts}
 
 
 def route_entry(state: State) -> Literal["call_finishing_model", "call_model"]:

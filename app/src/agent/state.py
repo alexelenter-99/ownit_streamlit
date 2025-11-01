@@ -17,10 +17,10 @@ class InputState:
         default_factory=list
     )
     email: Optional[str] = None
+    artifacts: List[Dict[str, Any]] = field(default_factory=list)
+    image_count: int = 0
 
 
 @dataclass
 class State(InputState):
     is_last_step: IsLastStep = field(default=False)
-    artifacts: List[Dict[str, Any]] = field(default_factory=list)
-    image_count: int = 0

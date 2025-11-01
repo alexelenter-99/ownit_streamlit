@@ -82,7 +82,12 @@ async def run_agent(email: str | None = None) -> dict[str, Any]:
     """
     try:
         # Create input state from the full message history
-        input_state = InputState(messages=st.session_state.messages, email=email)
+        input_state = InputState(
+            messages=st.session_state.messages,
+            email=email,
+            artifacts=st.session_state.artifacts,
+            image_count=len(st.session_state.artifacts),
+        )
 
         # Configure the agent with the thread_id
         config = {
@@ -113,12 +118,6 @@ def setup_sidebar() -> str:
             placeholder="your.email@example.com",
             help="Your email is required to start the chat.",
         )
-
-        if st.button("🗑️ Borrars Chat", type="secondary"):
-            st.session_state.messages = []
-            st.session_state.artifacts = []
-            st.session_state.thread_id = str(uuid.uuid4())
-            st.rerun()
 
         st.markdown("---")
         st.subheader("📦 Imagenes Generadas")
@@ -214,12 +213,7 @@ def process_agent_result(result: dict[str, Any]) -> None:
     """Process the agent result and update session state."""
     # --- Replace local state with the full state from the agent's memory ---
     st.session_state.messages = result.get("messages", [])
-    new_artifacts = result.get("artifacts", [])
-    current_count = len(st.session_state.artifacts)
-    result_count = len(new_artifacts)
-    if result_count > current_count:
-        truly_new_artifacts = new_artifacts[current_count:]
-        st.session_state.artifacts.extend(truly_new_artifacts)
+    st.session_state.artifacts = result.get("artifacts", [])
 
 
 def main():
