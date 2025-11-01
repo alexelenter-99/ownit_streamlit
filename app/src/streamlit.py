@@ -46,17 +46,14 @@ if "thread_id" not in st.session_state:
     st.session_state.thread_id = str(uuid.uuid4())
 
 
-def display_artifact(artifact: dict[str, Any]) -> None:
+def display_artifact(artifact: dict[str, Any], index: int | None = None) -> None:
     """Display an artifact in the Streamlit interface."""
-    # breakpoint()
     with st.container():
         st.markdown('<div class="artifact-container">', unsafe_allow_html=True)
 
         artifact_type = artifact.get("type", "unknown")
-        st.subheader(f"🎨 Artifact: {artifact_type.title()}")
 
         if artifact_type == "image":
-            # --- FIX: Changed "data" to "b64" to match graph.py ---
             image_data = artifact.get("b64")
             if image_data:
                 try:
@@ -64,9 +61,7 @@ def display_artifact(artifact: dict[str, Any]) -> None:
                         image_data = image_data.split(",")[1]
 
                     image_bytes = base64.b64decode(image_data)
-                    st.image(
-                        image_bytes, caption=artifact.get("name", "Generated Image")
-                    )
+                    st.image(image_bytes)
                 except Exception as e:
                     st.error(f"Error displaying image: {e!s}")
 
@@ -125,22 +120,26 @@ def setup_sidebar() -> str:
             st.session_state.thread_id = str(uuid.uuid4())
             st.rerun()
 
-        # --- MOVED DISPLAY ARTIFACTS HERE ---
         st.markdown("---")
         st.subheader("📦 Imagenes Generadas")
         st.subheader("Tienes un limite de 3")
         st.markdown(f"**Total:** {len(st.session_state.artifacts)}")
 
         if st.session_state.artifacts:
-            # Display in reverse order (newest first)
-            for artifact in st.session_state.artifacts:
-                display_artifact(artifact)
+            for index, artifact in enumerate(st.session_state.artifacts):
+                if index > 0:
+                    st.markdown("---")
+                if index == 0:
+                    st.markdown("🥇 **Primera Imagen**")
+                elif index == 1:
+                    st.markdown("🥈 **Segunda Imagen**")
+                elif index == 2:
+                    st.markdown("🥉 **Tercera Imagen**")
+                display_artifact(artifact, index)
         else:
             st.caption("No se generaron imagenes todavia.")
-        # --- END MOVED SECTION ---
 
         st.markdown("---")
-        # st.caption(f"Thread ID: `{st.session_state.thread_id}`")
 
     return user_email
 
@@ -153,22 +152,23 @@ def display_chat_history() -> None:
                 st.write(message.content)
         elif isinstance(message, AIMessage):
             with st.chat_message("assistant"):
-                st.write(message.content)
-                if hasattr(message, "response_metadata") and message.response_metadata:
-                    internal_plan = message.response_metadata.get("internal_plan")
-                    if internal_plan:
-                        with st.expander("🤔 Internal Plan"):
-                            st.markdown(internal_plan)
+                if message.content:
+                    st.write(message.content)
+                # if hasattr(message, "response_metadata") and message.response_metadata: TODO: uncomment if want to show
+                #     internal_plan = message.response_metadata.get("internal_plan")
+                #     if internal_plan:
+                #         with st.expander("🤔 Internal Plan"):
+                #             st.markdown(internal_plan)
 
-                if hasattr(message, "tool_calls") and message.tool_calls:
-                    with st.expander("🔧 Tool Calls"):
-                        for tool_call in message.tool_calls:
-                            st.json(
-                                {
-                                    "name": tool_call.get("name", "unknown"),
-                                    "args": tool_call.get("args", {}),
-                                }
-                            )
+                # if hasattr(message, "tool_calls") and message.tool_calls:
+                #     with st.expander("🔧 Tool Calls"):
+                #         for tool_call in message.tool_calls:
+                #             st.json(
+                #                 {
+                #                     "name": tool_call.get("name", "unknown"),
+                #                     "args": tool_call.get("args", {}),
+                #                 }
+                #             )
 
 
 def display_artifacts_section() -> None:
@@ -215,7 +215,11 @@ def process_agent_result(result: dict[str, Any]) -> None:
     # --- Replace local state with the full state from the agent's memory ---
     st.session_state.messages = result.get("messages", [])
     new_artifacts = result.get("artifacts", [])
-    st.session_state.artifacts.extend(new_artifacts)
+    current_count = len(st.session_state.artifacts)
+    result_count = len(new_artifacts)
+    if result_count > current_count:
+        truly_new_artifacts = new_artifacts[current_count:]
+        st.session_state.artifacts.extend(truly_new_artifacts)
 
 
 def main():

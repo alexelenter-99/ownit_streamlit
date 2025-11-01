@@ -46,7 +46,6 @@ async def call_model(state: State) -> dict[str, Any]:
         system_time=datetime.now(tz=UTC).isoformat()
     )
 
-    # Get the model's response
     response = cast(
         AIMessage,
         await model.ainvoke(
@@ -54,51 +53,40 @@ async def call_model(state: State) -> dict[str, Any]:
         ),
     )
 
-    # --- MODIFICATION: Extract <Plan> into response_metadata ---
     user_facing_content = response.content
     internal_plan = None
 
-    # Start with existing metadata, or an empty dict
     new_response_metadata = response.response_metadata or {}
 
     if isinstance(user_facing_content, str):
-        # Use regex to find and extract the plan
-        # re.DOTALL makes '.' match newline characters.
         match = re.search(r"<Plan>(.*?)</Plan>(.*)", user_facing_content, re.DOTALL)
         if match:
             internal_plan = match.group(1).strip()
             user_facing_content = match.group(2).strip()
-            # Add the extracted plan to the metadata
             new_response_metadata["internal_plan"] = internal_plan
 
-    # Create a new AIMessage with the cleaned content and the new metadata
     cleaned_response = AIMessage(
         content=user_facing_content,
         id=response.id,
         tool_calls=response.tool_calls,
-        # Pass through other attributes
         name=getattr(response, "name", None),
         invalid_tool_calls=getattr(response, "invalid_tool_calls", None),
         tool_call_chunks=getattr(response, "tool_call_chunks", None),
         usage_metadata=getattr(response, "usage_metadata", None),
-        # Set the new metadata
         response_metadata=new_response_metadata,
     )
-    # --- END MODIFICATION ---
 
-    # Handle the case when it's the last step and the model still wants to use a tool
-    # Use the 'cleaned_response' for this check
     if state.is_last_step and cleaned_response.tool_calls:
         return {
             "messages": [
                 AIMessage(
-                    id=cleaned_response.id,  # Use ID from cleaned response
+                    id=cleaned_response.id,
                     content="Sorry, I could not find an answer to your question in the specified number of steps.",
                 ),
             ]
         }
 
-    return {"messages": [cleaned_response]}  # Return the message with metadata
+    return {"messages": [cleaned_response]}
 
 
 async def call_finishing_model(state: State) -> dict[str, Any]:
@@ -181,7 +169,6 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
     os.makedirs(base_path, exist_ok=True)  # Ensure the directory exists
 
     tool_messages = []
-    new_artifacts = []
     new_image_count = state.image_count
 
     for tool_call in last_message.tool_calls:
@@ -230,11 +217,10 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
             ):
                 logging.info(f"Tool {tool_name} finished, output to local path: {tool_output}")
 
-                # create artifact for frontend display
                 try:
                     with open(tool_output, "rb") as image_file:
                         image_b64 = base64.b64encode(image_file.read()).decode("utf-8")
-                    new_artifacts.append({"type": "image", "b64": image_b64}) 
+                    state.artifacts.append({"type": "image", "b64": image_b64}) 
                     logging.info(f"Created artifact for {tool_output}")
                 except Exception as e:
                     logging.error(f"Failed to create artifact from {tool_output}: {e}")                
@@ -257,10 +243,9 @@ async def custom_tool_node(state: State) -> dict[str, Any]:
                 )
             )
             logging.error(f"Error executing tool {tool_name}: {e}")  # For server logs
-
     return {
         "messages": [*state.messages, *tool_messages],
-        "artifacts": new_artifacts,
+        "artifacts": state.artifacts,
         "image_count": new_image_count,
     }
 
